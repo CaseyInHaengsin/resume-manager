@@ -5,3 +5,10 @@
 # React Router
 /.react-router/
 /build/
+
+# Local data (real resume content, user + token hashes)
+/data/
+
+# Local tool state
+.playwright-mcp/
+.claude/
