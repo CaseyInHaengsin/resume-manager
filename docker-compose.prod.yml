@@ -1,0 +1,14 @@
+services:
+  resume-builder-web:
+    image: caseyinhaengsin/resume-builder-web:latest
+    container_name: resume-builder-web
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: "production"
+      PORT: "3000"
+      HOST: "0.0.0.0"
+    volumes:
+      # Persist sqlite db + uploaded images on the host
+      - /mnt/user/appdata/resume-builder-web/data:/app/data
+    restart: unless-stopped

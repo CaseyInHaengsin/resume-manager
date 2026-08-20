@@ -1,0 +1,20 @@
+services:
+  resume-builder-web:
+    image: caseyinhaengsin/resume-builder-web:latest
+    container_name: resume-builder-web
+    ports:
+      - "8417:3000"
+    environment:
+      NODE_ENV: "production"
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      # Generate with: openssl rand -hex 32
+      SESSION_SECRET: "CHANGE_ME_TO_A_RANDOM_64_CHAR_HEX_STRING"
+      # Set to "true" once you front the app with HTTPS (reverse proxy, etc.)
+      COOKIE_SECURE: "false"
+    volumes:
+      - resume_builder_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  resume_builder_data:
