@@ -514,7 +514,9 @@ function Card({ row }: { row: Row }) {
       ref={setNodeRef}
       style={style}
       data-application-id={row.id}
-      className={`rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 hover:shadow-sm transition ${
+      {...attributes}
+      {...listeners}
+      className={`cursor-grab active:cursor-grabbing rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 hover:shadow-sm transition ${
         isDragging ? "shadow-lg ring-2 ring-blue-500" : ""
       }`}
     >
@@ -563,16 +565,13 @@ function Card({ row }: { row: Row }) {
               {flag.kind === "overdue" ? `!${flag.days}d` : `${flag.days}d`}
             </span>
           )}
-          <button
-            type="button"
-            className="cursor-grab rounded border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 text-[10px] leading-none text-gray-400 hover:text-gray-700 active:cursor-grabbing dark:text-gray-500 dark:hover:text-gray-200"
-            aria-label={`Drag ${row.jobTitle}`}
-            title="Drag"
-            {...attributes}
-            {...listeners}
+          <span
+            aria-hidden="true"
+            title="Drag to change status"
+            className="rounded border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 text-[10px] leading-none text-gray-400 dark:text-gray-500"
           >
             ::
-          </button>
+          </span>
         </div>
       </div>
       <fetcher.Form
@@ -585,6 +584,7 @@ function Card({ row }: { row: Row }) {
         <select
           name="status"
           value={optimisticStatus}
+          onPointerDown={(e) => e.stopPropagation()}
           onChange={(e) => e.currentTarget.form?.requestSubmit()}
           className="w-full text-[10px] rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-1 py-0.5 text-gray-700 dark:text-gray-300"
         >
