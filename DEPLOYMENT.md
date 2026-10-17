@@ -83,4 +83,34 @@ Back up the host-side volume directory to back up everything.
 ## Notes
 
 - App listens on port `3000` (React Router's default `react-router-serve`). Map to whatever external port you want, or front it with a reverse proxy (Nginx, Caddy, Traefik) for HTTPS.
-- No required secrets at the moment — auth is local. If/when env-based secrets are added (e.g. session keys, API keys), set them in the Portainer stack `environment:` block.
+
+## Environment
+
+Set these in the Portainer stack `environment:` block.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `PUBLIC_URL` | **yes, in production** | The browser-facing origin, e.g. `https://resume.caseyinhaengsin.com`. |
+| `SESSION_SECRET` | yes | Cookie signing key. `openssl rand -hex 32`. |
+| `COOKIE_SECURE` | no | `"true"` once HTTPS fronts the app. |
+| `ALLOW_SIGNUP` | no | Defaults to off in production. `"true"` to open registration. |
+
+### Why `PUBLIC_URL` is not optional
+
+The app sits behind a proxy that terminates TLS, so the server only ever sees
+`http://<container>:3000`. That is the same mismatch that forced
+`allowedActionOrigins` in `react-router.config.ts`.
+
+OAuth makes it load-bearing. The issuer, the resource identifier, and the
+metadata URLs are all compared byte-for-byte by the client, so they cannot be
+derived from the incoming request — they come from `PUBLIC_URL`. Set it wrong and
+Claude reports only "Couldn't reach the MCP server", with nothing in the app log
+to explain why. In production a missing `PUBLIC_URL` throws on first use rather
+than silently serving a broken discovery document.
+
+### Opening registration for the first account
+
+`ALLOW_SIGNUP` defaults to off in production, because `/oauth/authorize` grants
+access to whichever account is signed in and the endpoints face the internet.
+To create the first account: set `ALLOW_SIGNUP: "true"`, redeploy, sign up, then
+remove the variable and redeploy again.

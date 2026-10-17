@@ -28,6 +28,21 @@ const sessionStorage = createCookieSessionStorage({
 
 const USER_SESSION_KEY = "userId";
 
+/**
+ * Whether new accounts can be created. Off by default in production: the OAuth
+ * endpoints are internet-facing and `/oauth/authorize` grants against whatever
+ * account is signed in, so an open registration form is an open door to
+ * connecting a connector.
+ *
+ * The first account has to exist before this is turned off — set ALLOW_SIGNUP=true
+ * for one deploy, create it, then drop the variable.
+ */
+export function signupEnabled(): boolean {
+  const raw = process.env.ALLOW_SIGNUP;
+  if (raw !== undefined) return raw === "true";
+  return process.env.NODE_ENV !== "production";
+}
+
 async function getSession(request: Request) {
   return sessionStorage.getSession(request.headers.get("Cookie"));
 }

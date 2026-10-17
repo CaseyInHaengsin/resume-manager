@@ -1,7 +1,7 @@
 import { Form, Link, redirect, useLoaderData } from "react-router";
 import { db } from "~/db";
-import { companies, applications } from "~/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { companies, applications, networkContacts } from "~/db/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { requireUserId } from "~/lib/auth.server";
 import type { Route } from "./+types/companies.$id";
 
@@ -30,7 +30,22 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     )
     .orderBy(desc(applications.updatedAt))
     .all();
-  return { company, applications: companyApplications };
+  const people = db
+    .select({
+      id: networkContacts.id,
+      name: networkContacts.name,
+      headline: networkContacts.headline,
+    })
+    .from(networkContacts)
+    .where(
+      and(
+        eq(networkContacts.userId, userId),
+        eq(networkContacts.companyId, id),
+      ),
+    )
+    .orderBy(sql`${networkContacts.name} COLLATE NOCASE`)
+    .all();
+  return { company, applications: companyApplications, people };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -48,7 +63,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function CompanyDetail() {
-  const { company, applications } = useLoaderData<typeof loader>();
+  const { company, applications, people } = useLoaderData<typeof loader>();
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -145,6 +160,28 @@ export default function CompanyDetail() {
       {company.notes && (
         <Section title="Notes">
           <Paragraph value={company.notes} />
+        </Section>
+      )}
+
+      {people.length > 0 && (
+        <Section title={`People you know (${people.length})`}>
+          <ul className="space-y-1.5">
+            {people.map((p) => (
+              <li key={p.id}>
+                <Link
+                  to={`/network?q=${encodeURIComponent(p.name)}`}
+                  className="flex items-center justify-between gap-3 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <span className="text-gray-900 dark:text-white">{p.name}</span>
+                  {p.headline && (
+                    <span className="truncate text-xs text-gray-500 dark:text-gray-400">
+                      {p.headline}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
 

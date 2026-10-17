@@ -3,16 +3,28 @@ import {
   createUserSession,
   getUserId,
   signup,
+  signupEnabled,
 } from "~/lib/auth.server";
 import type { Route } from "./+types/signup";
+
+const CLOSED_MESSAGE =
+  "Registration is closed on this instance. Set ALLOW_SIGNUP=true to create the first account.";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await getUserId(request);
   if (userId) return redirect("/library");
+  if (!signupEnabled()) {
+    throw new Response(CLOSED_MESSAGE, { status: 404 });
+  }
   return null;
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  // Checked here as well as in the loader: the form POSTs straight to this
+  // action, so a gate that only guarded the page would guard nothing.
+  if (!signupEnabled()) {
+    throw new Response(CLOSED_MESSAGE, { status: 403 });
+  }
   const form = await request.formData();
   const username = (form.get("username") as string | null)?.trim() ?? "";
   const password = (form.get("password") as string | null) ?? "";

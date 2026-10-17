@@ -2,8 +2,12 @@ import { createMcpServer } from "~/mcp/server";
 import { handleMcpHttp } from "~/mcp/transport";
 import {
   McpUnauthorizedError,
-  requireMcpUserId,
+  requireMcpAuth,
 } from "~/lib/mcp-auth.server";
+import {
+  SUPPORTED_SCOPES,
+  getProtectedResourceMetadataUrl,
+} from "~/lib/oauth.server";
 import type { Route } from "./+types/mcp";
 
 function jsonRpcErrorResponse(
@@ -25,20 +29,36 @@ function jsonRpcErrorResponse(
   );
 }
 
+/**
+ * The challenge that starts the whole OAuth flow. A client with no usable
+ * credential reads `resource_metadata` from here to find the protected resource
+ * metadata document, and from there the authorization server.
+ *
+ * This must be sent on a 401 — Claude ignores `WWW-Authenticate` on a 200 — and
+ * without it a client falls back to probing well-known paths, which costs
+ * round-trips and fails outright on hosts that can't serve `/.well-known/*`.
+ */
+function challengeHeader(): string {
+  return (
+    `Bearer resource_metadata="${getProtectedResourceMetadataUrl()}", ` +
+    `scope="${SUPPORTED_SCOPES.join(" ")}"`
+  );
+}
+
 async function handle(request: Request): Promise<Response> {
-  let userId: number;
+  let auth;
   try {
-    userId = await requireMcpUserId(request);
+    auth = await requireMcpAuth(request);
   } catch (err) {
     if (err instanceof McpUnauthorizedError) {
       return jsonRpcErrorResponse(401, -32001, "Unauthorized", {
-        "WWW-Authenticate": 'Bearer realm="mcp"',
+        "WWW-Authenticate": challengeHeader(),
       });
     }
     throw err;
   }
   try {
-    const server = createMcpServer(userId);
+    const server = createMcpServer(auth.userId, auth.scopes);
     return await handleMcpHttp(request, server);
   } catch (err) {
     console.error("[mcp] internal error", err);

@@ -93,7 +93,51 @@ This app exposes your resume/job-search data to Claude (Desktop or Code) via the
 - **Dev**: `http://localhost:5173/mcp`
 - **Prod**: `https://<your-host>/mcp`
 
-Both accept `POST` (JSON-RPC) and `GET` (SSE). Authenticate with a bearer token generated from `/settings`.
+Both accept `POST` (JSON-RPC) and `GET` (SSE). There are two ways to authenticate:
+
+- **OAuth** — the only option for claude.ai and the mobile apps, and the easiest for Claude Code. Nothing to copy or paste; you approve a consent screen instead. See [Connect Claude web and mobile](#connect-claude-web-and-mobile).
+- **A bearer token** from `/settings` — for hand-written Claude Desktop / Claude Code config.
+
+### Connect Claude web and mobile
+
+Connectors are added on claude.ai and then used everywhere, **including iOS and
+Android** — the mobile apps can use a connector but can't add one, so this step
+happens on the web once.
+
+1. Deploy with `PUBLIC_URL` set (see [DEPLOYMENT.md](DEPLOYMENT.md)). The server must be reachable over HTTPS.
+2. On claude.ai: **Settings → Connectors → Add custom connector**.
+3. URL: `https://<your-host>/mcp`. Leave the OAuth client ID and secret blank — the server supports Dynamic Client Registration, so Claude registers itself.
+4. Claude opens the app's sign-in page, then a consent screen. Approve it.
+5. Open Claude on your phone. The `resume-builder` tools are there.
+
+For **Claude Code**, the same flow works without a token:
+
+```bash
+claude mcp add resume-builder --transport http --url https://<your-host>/mcp
+```
+
+It opens a browser for consent and stores the tokens itself.
+
+<details>
+<summary>How the OAuth side is put together</summary>
+
+The app is its own authorization server; there is no external identity provider.
+
+| Endpoint | Purpose |
+|---|---|
+| `/.well-known/oauth-protected-resource` | RFC 9728 metadata; also served at `/…/oauth-protected-resource/mcp` |
+| `/.well-known/oauth-authorization-server` | RFC 8414 metadata |
+| `/oauth/register` | RFC 7591 dynamic client registration (JSON) |
+| `/oauth/authorize` | Consent screen, gated on your normal app login |
+| `/oauth/token` | Code exchange and refresh (form-urlencoded) |
+
+Access tokens last an hour, refresh tokens 30 days and rotate on every use.
+Tokens are bound to `<PUBLIC_URL>/mcp` as their audience. Scopes are `mcp:read`
+and `mcp:write`; a token without `mcp:write` is not offered the write tools at
+all. Registration only accepts callbacks on `claude.ai` / `claude.com` or an
+RFC 8252 loopback address.
+
+</details>
 
 ### Generate a token
 
@@ -161,6 +205,9 @@ All tools are scoped to the token-bearer's user. Writes are intentionally narrow
 - **401 on every request**: token is missing, malformed, or was revoked. Regenerate from `/settings`.
 - **Claude Desktop doesn't list the server**: restart after editing `claude_desktop_config.json`; check the file is valid JSON.
 - **Tools work but writes don't reflect in the UI**: make sure you're logged in as the same user the token was generated for.
+- **"Couldn't reach the MCP server" when adding a connector**: almost always `PUBLIC_URL`. Check that `curl https://<your-host>/.well-known/oauth-protected-resource/mcp` returns a document whose `resource` is exactly the URL you typed into Claude, and that `issuer` in `/.well-known/oauth-authorization-server` matches the host you fetched it from.
+- **"Unknown client_id" on the consent screen**: the registration was pruned (unused registrations are dropped after 30 days). Remove and re-add the connector.
+- **Only read tools appear**: the token was granted `mcp:read` but not `mcp:write`. Disconnect and reconnect to re-consent.
 
 ---
 

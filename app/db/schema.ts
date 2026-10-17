@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // ── Auth ──
@@ -124,6 +124,35 @@ export const companies = sqliteTable("companies", {
   updatedAt: text("updated_at").notNull(),
 });
 
+// ── Personal network (people the user knows; distinct from `contact`, which is
+// the user's own resume header) ──
+
+export const NETWORK_CONTACT_SOURCES = ["linkedin_csv", "manual"] as const;
+export type NetworkContactSource = (typeof NETWORK_CONTACT_SOURCES)[number];
+
+export const networkContacts = sqliteTable(
+  "network_contacts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyId: integer("company_id").references(() => companies.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    headline: text("headline"),
+    notes: text("notes"),
+    source: text("source")
+      .notNull()
+      .default("manual")
+      .$type<NetworkContactSource>(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("network_contacts_user_company_idx").on(t.userId, t.companyId)],
+);
+
 // ── Resume tables (each resume is a selection of library content) ──
 
 export const resumes = sqliteTable("resumes", {
@@ -233,4 +262,77 @@ export const resumeSkills = sqliteTable("resume_skills", {
     .notNull()
     .references(() => skills.id, { onDelete: "cascade" }),
   sortOrder: integer("sort_order").notNull().default(0),
+});
+
+// ── OAuth 2.1 (MCP authorization server) ──
+//
+// The app is its own authorization server for the `/mcp` resource: Claude's
+// connector UI accepts a URL and, at most, an OAuth client id/secret — there is
+// no field for a static bearer token — so remote clients (claude.ai web, and
+// therefore mobile) authenticate through the flow these tables back.
+//
+// Codes and tokens are stored as SHA-256 digests, not bcrypt hashes. They are
+// 256-bit random strings rather than passwords, so a fast digest is sound and
+// buys an indexed O(1) lookup on a path that runs on every MCP request.
+
+export const OAUTH_SCOPES = ["mcp:read", "mcp:write"] as const;
+export type OAuthScope = (typeof OAUTH_SCOPES)[number];
+
+export const oauthClients = sqliteTable("oauth_clients", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  clientId: text("client_id").notNull().unique(),
+  clientSecretHash: text("client_secret_hash"), // null => public client (PKCE only)
+  clientName: text("client_name").notNull(),
+  redirectUris: text("redirect_uris").notNull(), // JSON array of strings
+  tokenEndpointAuthMethod: text("token_endpoint_auth_method")
+    .notNull()
+    .default("none"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const oauthAuthCodes = sqliteTable("oauth_auth_codes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  codeHash: text("code_hash").notNull().unique(),
+  clientId: text("client_id").notNull(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(), // S256 only
+  scope: text("scope").notNull(), // space-delimited
+  resource: text("resource").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"), // single-use; set on first exchange
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const oauthAccessTokens = sqliteTable("oauth_access_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tokenHash: text("token_hash").notNull().unique(),
+  clientId: text("client_id").notNull(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  scope: text("scope").notNull(),
+  resource: text("resource").notNull(), // audience; checked on every MCP request
+  expiresAt: text("expires_at").notNull(),
+  revokedAt: text("revoked_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tokenHash: text("token_hash").notNull().unique(),
+  clientId: text("client_id").notNull(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  scope: text("scope").notNull(),
+  resource: text("resource").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  // Rotation: on use, the old row is stamped with the hash that replaced it.
+  // A later presentation of a rotated token is a replay -> invalid_grant.
+  rotatedTo: text("rotated_to"),
+  revokedAt: text("revoked_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

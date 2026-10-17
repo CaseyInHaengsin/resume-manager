@@ -44,9 +44,19 @@ export function importUserData(userId: number, payload: ExportPayload) {
       sqlite.prepare("DELETE FROM summaries WHERE user_id = ?").run(userId);
       sqlite.prepare("DELETE FROM education WHERE user_id = ?").run(userId);
       sqlite.prepare("DELETE FROM contact WHERE user_id = ?").run(userId);
-      sqlite.prepare("DELETE FROM companies WHERE user_id = ?").run(userId);
 
       const d = payload.data;
+      // Backups taken before the network feature have no `networkContacts`
+      // key; keep the existing network rather than silently wiping it.
+      const hasNetwork = Array.isArray(
+        (d as { networkContacts?: unknown }).networkContacts,
+      );
+      if (hasNetwork)
+        sqlite
+          .prepare("DELETE FROM network_contacts WHERE user_id = ?")
+          .run(userId);
+      sqlite.prepare("DELETE FROM companies WHERE user_id = ?").run(userId);
+
       const idMap: Record<string, Map<number, number>> = {
         contact: new Map(),
         education: new Map(),
@@ -324,6 +334,33 @@ export function importUserData(userId: number, payload: ExportPayload) {
             r.nextStepAt ?? null,
             r.lastContactAt ?? null,
             r.notes ?? null,
+            r.createdAt,
+            r.updatedAt,
+          ],
+        );
+      }
+
+      // 6. network contacts — references companies
+      for (const r of hasNetwork ? d.networkContacts : []) {
+        insert(
+          "network_contacts",
+          [
+            "user_id",
+            "company_id",
+            "name",
+            "headline",
+            "notes",
+            "source",
+            "created_at",
+            "updated_at",
+          ],
+          [
+            userId,
+            r.companyId != null ? idMap.companies.get(r.companyId) ?? null : null,
+            r.name,
+            r.headline ?? null,
+            r.notes ?? null,
+            r.source ?? "manual",
             r.createdAt,
             r.updatedAt,
           ],

@@ -12,6 +12,14 @@ services:
       SESSION_SECRET: "CHANGE_ME_TO_A_RANDOM_64_CHAR_HEX_STRING"
       # Set to "true" once you front the app with HTTPS (reverse proxy, etc.)
       COOKIE_SECURE: "false"
+      # REQUIRED in production. The browser-facing origin, not the address the
+      # container sees behind the proxy. Every OAuth issuer / resource / metadata
+      # URL is built from this and clients compare them byte-for-byte, so a wrong
+      # value breaks Claude connectors with an unhelpful "couldn't reach" error.
+      PUBLIC_URL: "https://resume.caseyinhaengsin.com"
+      # Registration is closed by default in production. Flip to "true" for one
+      # deploy if you need to create an account, then remove it.
+      # ALLOW_SIGNUP: "true"
     volumes:
       - resume_builder_data:/app/data
     restart: unless-stopped

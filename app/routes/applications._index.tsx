@@ -29,6 +29,7 @@ import {
 } from "~/db/schema";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { requireUserId } from "~/lib/auth.server";
+import { contactCountsByCompany } from "~/lib/network.server";
 import type { Route } from "./+types/applications._index";
 
 type Row = {
@@ -47,6 +48,7 @@ type Row = {
   nextStepAt: string | null;
   lastContactAt: string | null;
   updatedAt: string;
+  knownCount: number; // network contacts at this company
 };
 
 function isStatus(s: unknown): s is ApplicationStatus {
@@ -81,7 +83,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     .leftJoin(resumes, eq(applications.resumeId, resumes.id))
     .where(eq(applications.userId, userId))
     .orderBy(desc(applications.updatedAt))
-    .all() as Row[];
+    .all();
+  const counts = contactCountsByCompany(userId);
+  const rowsWithCounts: Row[] = rows.map((r) => ({
+    ...r,
+    knownCount: r.companyId != null ? (counts[r.companyId] ?? 0) : 0,
+  }));
 
   const allCompanies = db
     .select({ id: companies.id, name: companies.name })
@@ -97,7 +104,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     .orderBy(asc(resumes.name))
     .all();
 
-  return { rows, companies: allCompanies, resumes: allResumes };
+  return { rows: rowsWithCounts, companies: allCompanies, resumes: allResumes };
 }
 
 // ── Follow-up heuristic ──
@@ -528,6 +535,7 @@ function Card({ row }: { row: Row }) {
           {row.companyName && (
             <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-0.5">
               {row.companyName}
+              {row.knownCount > 0 && <KnownChip n={row.knownCount} />}
             </p>
           )}
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -648,6 +656,7 @@ function ListView({ rows }: { rows: Row[] }) {
                 </td>
                 <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
                   {r.companyName ?? "—"}
+                  {r.knownCount > 0 && <KnownChip n={r.knownCount} />}
                 </td>
                 <td className="px-3 py-2">
                   <span
@@ -674,5 +683,13 @@ function ListView({ rows }: { rows: Row[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function KnownChip({ n }: { n: number }) {
+  return (
+    <span className="ml-1.5 text-[10px] rounded-full bg-blue-100 dark:bg-blue-900/50 px-1.5 py-0.5 text-blue-800 dark:text-blue-200">
+      you know {n}
+    </span>
   );
 }

@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import {
   generateToken,
   getActiveToken,
-  requireMcpUserId,
+  requireMcpAuth,
   McpUnauthorizedError,
 } from "../../app/lib/mcp-auth.server";
 
@@ -31,38 +31,39 @@ async function main() {
   if (active?.id !== id) throw new Error(`expected active id ${id}, got ${active?.id}`);
   console.log(`getActiveToken: ok (id=${active.id}, label=${active.label})`);
 
-  // 3. requireMcpUserId with good token.
+  // 3. requireMcpAuth with good token.
   const goodReq = new Request("http://x/mcp", {
     headers: { authorization: `Bearer ${plaintext}` },
   });
-  const returnedUserId = await requireMcpUserId(goodReq);
+  const returned = await requireMcpAuth(goodReq);
+  const returnedUserId = returned.userId;
   if (returnedUserId !== user.id)
     throw new Error(`expected userId ${user.id}, got ${returnedUserId}`);
-  console.log(`requireMcpUserId (good token): ok (returned ${returnedUserId})`);
+  console.log(`requireMcpAuth (good token): ok (returned ${returnedUserId})`);
 
-  // 4. requireMcpUserId with bad token.
+  // 4. requireMcpAuth with bad token.
   const badReq = new Request("http://x/mcp", {
     headers: { authorization: "Bearer not-a-real-token" },
   });
   let threw = false;
   try {
-    await requireMcpUserId(badReq);
+    await requireMcpAuth(badReq);
   } catch (e) {
     if (e instanceof McpUnauthorizedError) threw = true;
   }
   if (!threw) throw new Error("bad token did not throw McpUnauthorizedError");
-  console.log("requireMcpUserId (bad token): ok (threw McpUnauthorizedError)");
+  console.log("requireMcpAuth (bad token): ok (threw McpUnauthorizedError)");
 
   // 5. Missing header.
   const noReq = new Request("http://x/mcp");
   threw = false;
   try {
-    await requireMcpUserId(noReq);
+    await requireMcpAuth(noReq);
   } catch (e) {
     if (e instanceof McpUnauthorizedError) threw = true;
   }
   if (!threw) throw new Error("missing header did not throw");
-  console.log("requireMcpUserId (missing header): ok");
+  console.log("requireMcpAuth (missing header): ok");
 
   // 6. Regenerate revokes the old one.
   const { plaintext: plaintext2 } = await generateToken(user.id, "smoke-test-2");
@@ -71,19 +72,19 @@ async function main() {
   });
   threw = false;
   try {
-    await requireMcpUserId(oldReq);
+    await requireMcpAuth(oldReq);
   } catch (e) {
     if (e instanceof McpUnauthorizedError) threw = true;
   }
   if (!threw) throw new Error("revoked token did not throw");
-  console.log("requireMcpUserId (revoked token): ok");
+  console.log("requireMcpAuth (revoked token): ok");
 
   const newReq = new Request("http://x/mcp", {
     headers: { authorization: `Bearer ${plaintext2}` },
   });
-  const reUserId = await requireMcpUserId(newReq);
+  const reUserId = (await requireMcpAuth(newReq)).userId;
   if (reUserId !== user.id) throw new Error("new token userId mismatch");
-  console.log("requireMcpUserId (new token after regen): ok");
+  console.log("requireMcpAuth (new token after regen): ok");
 
   // Clean up: revoke the smoke-test token.
   db.update((await import("../../app/db/schema")).mcpTokens)

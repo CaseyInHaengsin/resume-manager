@@ -7,6 +7,7 @@ import {
   contact,
   education,
   jobs,
+  networkContacts,
   projects,
   resumeBullets,
   resumeJobs,
@@ -39,6 +40,7 @@ const EMPTY_IMPORT_TEMPLATE = {
     resumeSkills: ["resumeId", "skillId"],
     resumeBullets: ["resumeId", "bulletId"],
     applications: ["id", "jobTitle", "createdAt", "updatedAt"],
+    networkContacts: ["id", "name", "createdAt", "updatedAt"],
   },
   allowedValues: {
     bullets: { parentType: ["job", "project"], priority: [1, 2, 3] },
@@ -195,6 +197,7 @@ function buildEmptyExportData() {
     resumeSkills: [],
     resumeBullets: [],
     applications: [],
+    networkContacts: [],
   };
 }
 
@@ -228,6 +231,7 @@ export async function buildExportPayload(
     resumeSkillsRows,
     resumeBulletsRows,
     applicationsRows,
+    networkContactsRows,
   ] = await Promise.all([
     db.select().from(contact).where(eq(contact.userId, userId)),
     db.select().from(education).where(eq(education.userId, userId)),
@@ -280,6 +284,10 @@ export async function buildExportPayload(
       .innerJoin(resumes, eq(resumes.id, resumeBullets.resumeId))
       .where(eq(resumes.userId, userId)),
     db.select().from(applications).where(eq(applications.userId, userId)),
+    db
+      .select()
+      .from(networkContacts)
+      .where(eq(networkContacts.userId, userId)),
   ]);
 
   const data = {
@@ -297,6 +305,7 @@ export async function buildExportPayload(
     resumeSkills: resumeSkillsRows,
     resumeBullets: resumeBulletsRows,
     applications: stripUser(applicationsRows),
+    networkContacts: stripUser(networkContactsRows),
   };
 
   return {

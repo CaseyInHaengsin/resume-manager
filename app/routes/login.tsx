@@ -1,22 +1,34 @@
-import { Form, Link, redirect, useActionData, useSearchParams } from "react-router";
+import { Form, Link, redirect, useActionData, useLoaderData, useSearchParams } from "react-router";
 import {
   createUserSession,
   getUserId,
   login,
+  signupEnabled,
 } from "~/lib/auth.server";
 import type { Route } from "./+types/login";
+
+/**
+ * `redirectTo` is attacker-supplied — it arrives in the query string of a link.
+ * Only same-site paths are allowed through, so a crafted /login?redirectTo=…
+ * can't bounce someone to another origin after they sign in. This matters more
+ * now that /oauth/authorize sends users through here mid-flow.
+ */
+function safeRedirect(to: string | null | undefined, fallback = "/library") {
+  if (!to || !to.startsWith("/") || to.startsWith("//")) return fallback;
+  return to;
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await getUserId(request);
   if (userId) return redirect("/library");
-  return null;
+  return { signupEnabled: signupEnabled() };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   const username = (form.get("username") as string | null)?.trim() ?? "";
   const password = (form.get("password") as string | null) ?? "";
-  const redirectTo = (form.get("redirectTo") as string | null) || "/library";
+  const redirectTo = safeRedirect(form.get("redirectTo") as string | null);
 
   if (!username || !password) {
     return { error: "Username and password are required" };
@@ -30,8 +42,9 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function LoginPage() {
   const actionData = useActionData<typeof action>();
+  const { signupEnabled } = useLoaderData<typeof loader>();
   const [params] = useSearchParams();
-  const redirectTo = params.get("redirectTo") ?? "/library";
+  const redirectTo = safeRedirect(params.get("redirectTo"));
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
@@ -70,12 +83,14 @@ export default function LoginPage() {
           >
             Sign in
           </button>
-          <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-            No account?{" "}
-            <Link to="/signup" className="text-blue-600 dark:text-blue-400 hover:underline">
-              Sign up
-            </Link>
-          </p>
+          {signupEnabled && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+              No account?{" "}
+              <Link to="/signup" className="text-blue-600 dark:text-blue-400 hover:underline">
+                Sign up
+              </Link>
+            </p>
+          )}
         </Form>
       </div>
     </div>

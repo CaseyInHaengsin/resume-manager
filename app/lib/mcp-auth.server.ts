@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "~/db";
 import { mcpTokens } from "~/db/schema";
+import { SUPPORTED_SCOPES, verifyAccessToken } from "~/lib/oauth.server";
 
 const TOKEN_PREFIX = "rbmcp_";
 const BCRYPT_ROUNDS = 10;
@@ -64,13 +65,42 @@ export function getActiveToken(userId: number): ActiveToken | null {
   return row ?? null;
 }
 
-export async function requireMcpUserId(request: Request): Promise<number> {
+export type McpAuth = {
+  userId: number;
+  scopes: string[];
+};
+
+/**
+ * Resolve the bearer token on an MCP request.
+ *
+ * Two credentials reach this endpoint. OAuth access tokens are the path that
+ * makes remote clients (claude.ai, and therefore mobile) work, and they carry
+ * scopes and an audience. Legacy `rbmcp_` tokens are the hand-generated kind
+ * pasted into a Claude Desktop or Claude Code config; they predate scopes, so
+ * they get all of them.
+ *
+ * The OAuth lookup runs first and is an indexed digest match. The legacy lookup
+ * bcrypt-compares against every live row, so it stays behind the cheap path.
+ */
+export async function requireMcpAuth(request: Request): Promise<McpAuth> {
   const header = request.headers.get("authorization");
   if (!header) throw new McpUnauthorizedError();
   const [scheme, token] = header.split(/\s+/, 2);
   if (scheme?.toLowerCase() !== "bearer" || !token) {
     throw new McpUnauthorizedError();
   }
+
+  const oauth = verifyAccessToken(token);
+  if (oauth) {
+    return { userId: oauth.userId, scopes: oauth.scopes };
+  }
+
+  const userId = await verifyLegacyToken(token);
+  if (userId === null) throw new McpUnauthorizedError();
+  return { userId, scopes: [...SUPPORTED_SCOPES] };
+}
+
+async function verifyLegacyToken(token: string): Promise<number | null> {
   const candidates = db
     .select({
       id: mcpTokens.id,
@@ -89,5 +119,5 @@ export async function requireMcpUserId(request: Request): Promise<number> {
       return row.userId;
     }
   }
-  throw new McpUnauthorizedError();
+  return null;
 }

@@ -39,6 +39,9 @@ export default function AppLayout() {
               <NavLink to="/applications" className={linkClasses}>
                 Applications
               </NavLink>
+              <NavLink to="/network" className={linkClasses}>
+                Network
+              </NavLink>
               <NavLink to="/techstack" className={linkClasses}>
                 Tech Stack
               </NavLink>

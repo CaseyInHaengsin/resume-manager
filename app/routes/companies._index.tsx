@@ -3,6 +3,7 @@ import { db } from "~/db";
 import { companies } from "~/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { requireUserId } from "~/lib/auth.server";
+import { contactCountsByCompany } from "~/lib/network.server";
 import type { Route } from "./+types/companies._index";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -13,11 +14,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     .where(eq(companies.userId, userId))
     .orderBy(desc(companies.updatedAt))
     .all();
-  return { companies: rows };
+  return { companies: rows, contactCounts: contactCountsByCompany(userId) };
 }
 
 export default function CompaniesIndex() {
-  const { companies: rows } = useLoaderData<typeof loader>();
+  const { companies: rows, contactCounts } = useLoaderData<typeof loader>();
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -65,6 +66,11 @@ export default function CompaniesIndex() {
                     </p>
                   )}
                 </div>
+                {contactCounts[c.id] && (
+                  <span className="shrink-0 text-[10px] rounded-full bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 text-blue-800 dark:text-blue-200">
+                    {contactCounts[c.id]} contact{contactCounts[c.id] === 1 ? "" : "s"}
+                  </span>
+                )}
               </div>
               <div className="mt-3 flex flex-wrap gap-1">
                 {(c.techStack ?? []).slice(0, 4).map((t, i) => (
