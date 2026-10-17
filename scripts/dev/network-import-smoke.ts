@@ -51,13 +51,12 @@ const distinct = new Set(withCompany.map((r) => normalizeName(r.company)));
 console.log(
   `ok  parsed ${rows.length} rows (${withCompany.length} with company, ${distinct.size} distinct companies, ${parsed.skipped} skipped)`,
 );
-for (const name of [
-  "Easy To Use Products, LLC",
-  "Example Partners, P.C.",
-]) {
+// A quoted company containing a comma must survive as one field.
+const raw = fs.readFileSync(csvPath, "utf8");
+for (const m of raw.matchAll(/^[^,\n]*,"([^"]*,[^"]*)"/gm)) {
   assert.ok(
-    rows.some((r) => r.company === name),
-    `quoted company "${name}" not parsed intact`,
+    rows.some((r) => r.company === m[1]),
+    `quoted company "${m[1]}" not parsed intact`,
   );
 }
 console.log("ok  quoted companies intact");

@@ -3,11 +3,11 @@ import type { ResumeData } from "~/components/pdf/ResumeDocument";
 
 const sampleData: ResumeData = {
   contact: {
-    name: "Casey Rowley",
+    name: "Jane Doe",
     phone: "(555) 555-0100",
     email: "jane@example.com",
-    linkedin: "linkedin.com/in/casey-rowley",
-    github: "github.com/CaseyInHaengsin",
+    linkedin: "linkedin.com/in/jane-doe",
+    github: "github.com/jane-doe",
   },
   summary:
     "Platform engineer with 5+ years building API and integration layers for a multi-tenant SaaS serving 100+ higher education institutions. Experienced in GraphQL, authorization systems, and OAuth-based SSO integrations, including zero-downtime migration from a Node.js monolith. Background in customer-facing implementation roles, bridging engineering, product, and enterprise clients.",
